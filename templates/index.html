@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Veterans Verify - Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+      :root {
+        --bg: oklch(1 0 0);
+        --fg: oklch(0.21 0.006 285.885);
+
+        --primary: oklch(0.546 0.245 262.881);
+        --primary-fg: oklch(1 0 0);
+
+        --primary-subtle: oklch(0.623 0.214 259.815 / 0.15);
+        --primary-subtle-fg: oklch(0.488 0.243 264.376);
+
+        --secondary: oklch(0.92 0.004 286.32);
+        --secondary-fg: oklch(0.141 0.005 285.823);
+
+        --overlay: oklch(1 0 0);
+        --overlay-fg: oklch(0.141 0.005 285.823);
+
+        --accent: oklch(0.92 0.004 286.32);
+        --accent-fg: oklch(0.141 0.005 285.823);
+
+        --muted: oklch(0.967 0.001 286.375);
+        --muted-fg: oklch(0.552 0.016 285.938);
+
+        --success: oklch(0.596 0.145 163.225);
+        --success-fg: oklch(1 0 0);
+
+        --success-subtle: oklch(0.696 0.17 162.48 / 0.15);
+        --success-subtle-fg: oklch(0.508 0.118 165.612);
+
+        --info-subtle: oklch(0.685 0.169 237.323 / 0.15);
+        --info-subtle-fg: oklch(0.5 0.134 242.749);
+
+        --warning: oklch(0.828 0.189 84.429);
+        --warning-fg: oklch(0.279 0.077 45.635);
+
+        --warning-subtle: oklch(0.828 0.189 84.429 / 0.2);
+        --warning-subtle-fg: oklch(0.555 0.163 48.998);
+
+        --danger: oklch(0.577 0.245 27.325);
+        --danger-fg: oklch(0.971 0.013 17.38);
+
+        --danger-subtle: oklch(0.637 0.237 25.331 / 0.15);
+        --danger-subtle-fg: oklch(0.505 0.213 27.518);
+
+        --border: oklch(0.911 0.006 286.286);
+        --input: oklch(0.871 0.006 286.286);
+        --ring: oklch(0.546 0.245 262.881);
+
+        --navbar: oklch(0.995 0 0);
+        --navbar-fg: oklch(0.141 0.005 285.823);
+
+        --sidebar: oklch(0.985 0 0);
+        --sidebar-fg: oklch(0.141 0.005 285.823);
+        --sidebar-primary: oklch(0.623 0.214 259.815 / 0.15);
+        --sidebar-primary-fg: oklch(0.488 0.243 264.376);
+        --sidebar-accent: oklch(0.92 0.004 286.32);
+        --sidebar-accent-fg: oklch(0.141 0.005 285.823);
+        --sidebar-border: oklch(0.901 0.006 286.286);
+        --sidebar-ring: oklch(0.546 0.245 262.881);
+
+        --chart-1: oklch(0.546 0.245 262.881);
+        --chart-2: oklch(0.623 0.214 259.815);
+        --chart-3: oklch(0.707 0.165 254.624);
+        --chart-4: oklch(0.809 0.105 251.813);
+        --chart-5: oklch(0.882 0.059 254.128);
+
+        --radius-lg: 0.5rem;
+        --radius-xs: calc(var(--radius-lg) * 0.5);
+        --radius-sm: calc(var(--radius-lg) * 0.75);
+        --radius-md: calc(var(--radius-lg) * 0.9);
+        --radius-xl: calc(var(--radius-lg) * 1.25);
+        --radius-2xl: calc(var(--radius-lg) * 1.5);
+        --radius-3xl: calc(var(--radius-lg) * 2);
+        --radius-4xl: calc(var(--radius-lg) * 3);
+      }
+
+      .dark {
+        --bg: oklch(0.181 0.005 285.823);
+        --fg: oklch(0.985 0 0);
+
+        --primary: oklch(0.546 0.245 262.881);
+        --primary-fg: oklch(1 0 0);
+
+        --primary-subtle: oklch(0.623 0.214 259.815 / 0.1);
+        --primary-subtle-fg: oklch(0.707 0.165 254.624);
+
+        --secondary: oklch(0.244 0.006 286.033);
+        --secondary-fg: oklch(0.985 0 0);
+
+        --overlay: oklch(0.21 0.006 285.885);
+        --overlay-fg: oklch(0.985 0 0);
+
+        --accent: oklch(0.274 0.006 286.033);
+        --accent-fg: oklch(0.985 0 0);
+
+        --muted: oklch(0.21 0.006 285.885);
+        --muted-fg: oklch(0.705 0.015 286.067);
+
+        --success: oklch(0.596 0.145 163.225);
+        --success-fg: oklch(1 0 0);
+
+        --success-subtle: oklch(0.696 0.17 162.48 / 0.1);
+        --success-subtle-fg: oklch(0.765 0.177 163.223);
+
+        --info-subtle: oklch(0.685 0.169 237.323 / 0.1);
+        --info-subtle-fg: oklch(0.828 0.111 230.318);
+
+        --warning: oklch(0.828 0.189 84.429);
+        --warning-fg: oklch(0.279 0.077 45.635);
+
+        --warning-subtle: oklch(0.828 0.189 84.429 / 0.1);
+        --warning-subtle-fg: oklch(0.828 0.189 84.429);
+
+        --danger: oklch(0.577 0.245 27.325);
+        --danger-fg: oklch(0.971 0.013 17.38);
+
+        --danger-subtle: oklch(0.637 0.237 25.331 / 0.1);
+        --danger-subtle-fg: oklch(0.704 0.191 22.216);
+
+        --border: oklch(0.342 0.017 285.786);
+        --input: oklch(0.32 0.013 285.805);
+        --ring: oklch(0.546 0.245 262.881);
+
+        --navbar: oklch(0.19 0.006 285.885);
+        --navbar-fg: oklch(0.985 0 0);
+
+        --sidebar: oklch(0.21 0.006 285.885);
+        --sidebar-fg: oklch(0.985 0 0);
+        --sidebar-primary: oklch(0.623 0.214 259.815 / 0.1);
+        --sidebar-primary-fg: oklch(0.707 0.165 254.624);
+        --sidebar-accent: oklch(0.274 0.006 286.033);
+        --sidebar-accent-fg: oklch(0.985 0 0);
+        --sidebar-border: oklch(0.274 0.006 286.033);
+        --sidebar-ring: oklch(0.546 0.245 262.881);
+
+        --chart-1: oklch(0.488 0.243 264.376);
+        --chart-2: oklch(0.623 0.214 259.815);
+        --chart-3: oklch(0.707 0.165 254.624);
+        --chart-4: oklch(0.809 0.105 251.813);
+        --chart-5: oklch(0.882 0.059 254.128);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Plus Jakarta Sans", "Segoe UI", Tahoma, sans-serif;
+        background: radial-gradient(
+            900px circle at 15% 10%,
+            var(--primary-subtle),
+            transparent 55%
+          ),
+          radial-gradient(
+            900px circle at 85% -20%,
+            var(--info-subtle),
+            transparent 50%
+          ),
+          var(--bg);
+        color: var(--fg);
+      }
+
+      .page {
+        max-width: 1160px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      .card {
+        background: var(--overlay);
+        color: var(--overlay-fg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-2xl);
+        box-shadow: 0 30px 70px -60px oklch(0.2 0.02 260 / 0.55);
+        backdrop-filter: blur(8px);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        padding: 28px 32px;
+      }
+
+      .eyebrow {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.24em;
+        color: var(--muted-fg);
+      }
+
+      .title {
+        font-size: clamp(2rem, 2.8vw, 2.8rem);
+        font-weight: 700;
+        color: var(--fg);
+      }
+
+      .subtitle {
+        color: var(--muted-fg);
+        font-size: 0.92rem;
+        max-width: 520px;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--radius-xl);
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+
+      .pill-success {
+        background: var(--success-subtle);
+        color: var(--success-subtle-fg);
+        border-color: color-mix(in oklch, var(--success) 40%, transparent);
+      }
+
+      .pill-warning {
+        background: var(--warning-subtle);
+        color: var(--warning-subtle-fg);
+        border-color: color-mix(in oklch, var(--warning) 45%, transparent);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 11px 18px;
+        border-radius: var(--radius-lg);
+        font-weight: 600;
+        transition: transform 150ms ease, box-shadow 150ms ease,
+          background 150ms ease;
+        border: 1px solid transparent;
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: var(--primary-fg);
+        box-shadow: 0 12px 30px -18px var(--primary);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .btn-secondary {
+        background: var(--secondary);
+        color: var(--secondary-fg);
+        border-color: var(--border);
+      }
+
+      .btn-danger {
+        background: var(--danger);
+        color: var(--danger-fg);
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--muted-fg);
+        border-color: var(--border);
+      }
+
+      .btn-sm {
+        padding: 6px 12px;
+        font-size: 0.78rem;
+      }
+
+      .input,
+      .select {
+        width: 100%;
+        background: var(--muted);
+        color: var(--fg);
+        border: 1px solid var(--input);
+        border-radius: var(--radius-md);
+        padding: 9px 11px;
+        transition: border 150ms ease, box-shadow 150ms ease;
+      }
+
+      .input:focus,
+      .select:focus {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 25%, transparent);
+        outline: none;
+      }
+
+      .label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--muted-fg);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .stat-card {
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .stat-label {
+        font-size: 0.75rem;
+        color: var(--muted-fg);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .stat-value {
+        font-size: 1.7rem;
+        font-weight: 700;
+      }
+
+      .text-primary {
+        color: var(--primary);
+      }
+
+      .text-success {
+        color: var(--success);
+      }
+
+      .text-warning {
+        color: var(--warning);
+      }
+
+      .text-danger {
+        color: var(--danger);
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+
+      .table thead th {
+        text-align: left;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--muted-fg);
+        padding: 10px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .table tbody td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--overlay-fg);
+      }
+
+      .table tbody tr:hover {
+        background: var(--accent);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: var(--radius-xl);
+        font-size: 0.68rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+
+      .badge-primary {
+        background: var(--primary-subtle);
+        color: var(--primary-subtle-fg);
+        border-color: color-mix(in oklch, var(--primary) 35%, transparent);
+      }
+
+      .badge-success {
+        background: var(--success-subtle);
+        color: var(--success-subtle-fg);
+        border-color: color-mix(in oklch, var(--success) 35%, transparent);
+      }
+
+      .badge-warning {
+        background: var(--warning-subtle);
+        color: var(--warning-subtle-fg);
+        border-color: color-mix(in oklch, var(--warning) 35%, transparent);
+      }
+
+      .badge-danger {
+        background: var(--danger-subtle);
+        color: var(--danger-subtle-fg);
+        border-color: color-mix(in oklch, var(--danger) 35%, transparent);
+      }
+
+      .link {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--primary);
+      }
+
+      .link-danger {
+        color: var(--danger);
+      }
+
+      .muted-text {
+        color: var(--muted-fg);
+      }
+
+      .card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+
+      .card-subtitle {
+        color: var(--muted-fg);
+        font-size: 0.85rem;
+      }
+
+      .filter-select {
+        min-width: 110px;
+        padding: 6px 10px;
+        font-size: 0.78rem;
+      }
+
+      .filter-btn {
+        padding: 6px 12px;
+        font-size: 0.78rem;
+      }
+
+      @media (max-width: 768px) {
+        .page {
+          padding: 32px 18px 56px;
+        }
+
+        .header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    {% raw %}
+    <div id="app" class="page">
+      <!-- Header -->
+      <div class="card header">
+        <div>
+          <div class="eyebrow">Operations Console</div>
+          <p class="subtitle">
+            Manage account creation, monitor queue health, and review
+            verification outcomes.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span
+            :class="systemStatus === 'running' ? 'pill-success' : 'pill-warning'"
+            class="status-pill"
+          >
+            {{ systemStatus === 'running' ? 'Running' : 'Paused' }}
+          </span>
+          <a href="/logout" class="btn btn-ghost btn-sm">Logout</a>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="card stat-card">
+          <div class="stat-label">Total</div>
+          <div class="stat-value">{{ stats.total || 0 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">In Progress</div>
+          <div class="stat-value text-primary">{{ stats.pending || 0 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Success</div>
+          <div class="stat-value text-success">{{ stats.success || 0 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Failed</div>
+          <div class="stat-value text-danger">{{ stats.failed || 0 }}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Queue</div>
+          <div class="stat-value text-warning">{{ queueSize }}</div>
+        </div>
+      </div>
+
+      <!-- Control Panel -->
+      <div class="card p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 class="card-title">Batch Create Accounts</h2>
+            <p class="card-subtitle">
+              Spin up accounts in controlled batches with interval pacing.
+            </p>
+          </div>
+          <div class="muted-text text-sm">
+            Veteran Database: {{ vetStats.total || 0 }} records (Available: {{
+            vetStats.available || 0 }})
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">Count</label>
+            <input
+              v-model.number="createCount"
+              type="number"
+              min="1"
+              max="100"
+              class="input"
+            />
+          </div>
+          <div>
+            <label class="label">Interval (s)</label>
+            <input
+              v-model.number="createInterval"
+              type="number"
+              min="0"
+              max="60"
+              class="input"
+            />
+          </div>
+          <div class="flex items-end">
+            <button
+              @click="createAccounts"
+              :disabled="creating"
+              class="btn btn-primary w-full"
+            >
+              {{ creating ? 'Creating...' : 'Start Create' }}
+            </button>
+          </div>
+          <div class="flex items-end">
+            <button @click="stopAll" class="btn btn-danger w-full">
+              Stop All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account List -->
+      <div class="card p-6">
+        <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+          <div>
+            <h2 class="card-title">Account List</h2>
+            <p class="card-subtitle">
+              Track progress and handle retries or cleanup with one click.
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <select
+              v-model="statusFilter"
+              @change="fetchAccounts"
+              class="select filter-select"
+            >
+              <option value="">All</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="pending">In Progress</option>
+            </select>
+            <button
+              @click="exportAccounts"
+              class="btn btn-secondary btn-sm filter-btn"
+            >
+              Export
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Error Info</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="acc in accounts" :key="acc.email">
+                <td class="py-3 text-sm font-mono">{{ acc.email }}</td>
+                <td class="py-3">{{ acc.first_name }} {{ acc.last_name }}</td>
+                <td class="py-3 text-sm">{{ acc.branch }}</td>
+                <td class="py-3">
+                  <span :class="getStatusClass(acc.status)" class="badge">
+                    {{ getStatusText(acc.status) }}
+                  </span>
+                </td>
+                <td
+                  class="py-3 text-sm text-danger max-w-xs truncate"
+                  :title="acc.error_message"
+                >
+                  {{ acc.error_message || '-' }}
+                </td>
+                <td class="py-3">
+                  <button
+                    v-if="acc.status === 'failed'"
+                    @click="retryAccount(acc.email)"
+                    class="link mr-3"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    @click="deleteAccount(acc.email)"
+                    class="link link-danger"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="accounts.length === 0" class="text-center py-8 muted-text">
+            No accounts
+          </div>
+        </div>
+        <!-- Pagination -->
+        <div v-if="totalPages > 1" class="flex justify-center gap-2 mt-4">
+          <button
+            @click="page = Math.max(1, page - 1); fetchAccounts()"
+            :disabled="page <= 1"
+            class="btn btn-secondary btn-sm"
+          >
+            Previous
+          </button>
+          <span class="muted-text py-1">{{ page }} / {{ totalPages }}</span>
+          <button
+            @click="page = Math.min(totalPages, page + 1); fetchAccounts()"
+            :disabled="page >= totalPages"
+            class="btn btn-secondary btn-sm"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref, onMounted } = Vue;
+
+      createApp({
+        setup() {
+          const systemStatus = ref("running");
+          const stats = ref({});
+          const vetStats = ref({});
+          const queueSize = ref(0);
+          const accounts = ref([]);
+          const createCount = ref(1);
+          const createInterval = ref(0);
+          const creating = ref(false);
+          const statusFilter = ref("");
+          const page = ref(1);
+          const totalPages = ref(1);
+
+          const statusTextMap = {
+            pending: "Pending",
+            creating_email: "Creating Email",
+            registering: "Registering",
+            waiting_code: "Waiting for Code",
+            chatgpt_ready: "ChatGPT Ready",
+            opening_sheerid: "Opening SheerID",
+            filling_form: "Filling Form",
+            waiting_link: "Waiting for Link",
+            clicking_link: "Clicking Link",
+            success: "Success",
+            failed: "Failed",
+          };
+
+          const getStatusText = (status) => statusTextMap[status] || status;
+
+          const fetchStatus = async () => {
+            try {
+              const res = await fetch("/api/status");
+              const data = await res.json();
+              if (data.success) {
+                stats.value = data.accounts || {};
+                queueSize.value = data.queue_size || 0;
+              }
+            } catch (e) {
+              console.error("Failed to get status:", e);
+            }
+          };
+
+          const fetchVetStats = async () => {
+            try {
+              const res = await fetch("/api/veteran-data/stats");
+              const data = await res.json();
+              if (data.success) {
+                vetStats.value = data.stats || {};
+              }
+            } catch (e) {
+              console.error("Failed to get veteran stats:", e);
+            }
+          };
+
+          const fetchAccounts = async () => {
+            try {
+              const params = new URLSearchParams({
+                page: page.value,
+                per_page: 20,
+              });
+              if (statusFilter.value) params.set("status", statusFilter.value);
+
+              const res = await fetch(`/api/accounts?${params}`);
+              const data = await res.json();
+              if (data.success) {
+                accounts.value = data.accounts || [];
+                totalPages.value = data.total_pages || 1;
+              }
+            } catch (e) {
+              console.error("Failed to get account list:", e);
+            }
+          };
+
+          const createAccounts = async () => {
+            creating.value = true;
+            try {
+              const res = await fetch("/api/accounts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  count: createCount.value,
+                  interval: createInterval.value,
+                }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                fetchAccounts();
+                fetchStatus();
+              } else {
+                alert(data.error || "Create accounts failed");
+              }
+            } catch (e) {
+              console.error("Create accounts failed:", e);
+              alert("Create accounts failed");
+            } finally {
+              creating.value = false;
+            }
+          };
+
+          const retryAccount = async (email) => {
+            try {
+              await fetch(`/api/accounts/${encodeURIComponent(email)}/retry`, {
+                method: "POST",
+              });
+              fetchAccounts();
+              fetchStatus();
+            } catch (e) {
+              console.error("Retry failed:", e);
+            }
+          };
+
+          const deleteAccount = async (email) => {
+            if (!confirm("Are you sure you want to delete this account?"))
+              return;
+            try {
+              await fetch(`/api/accounts/${encodeURIComponent(email)}`, {
+                method: "DELETE",
+              });
+              fetchAccounts();
+              fetchStatus();
+            } catch (e) {
+              console.error("Delete failed:", e);
+            }
+          };
+
+          const stopAll = async () => {
+            if (!confirm("Are you sure you want to stop all tasks?")) return;
+            try {
+              await fetch("/api/accounts/stop-all", { method: "POST" });
+              fetchAccounts();
+              fetchStatus();
+            } catch (e) {
+              console.error("Stop failed:", e);
+            }
+          };
+
+          const exportAccounts = async () => {
+            try {
+              const res = await fetch("/api/accounts/export");
+              const data = await res.json();
+              const blob = new Blob([JSON.stringify(data, null, 2)], {
+                type: "application/json",
+              });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `veterans-accounts-${new Date()
+                .toISOString()
+                .slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            } catch (e) {
+              console.error("Export failed:", e);
+            }
+          };
+
+          const getStatusClass = (status) => {
+            const classes = {
+              pending: "badge-primary",
+              creating_email: "badge-primary",
+              registering: "badge-primary",
+              waiting_code: "badge-warning",
+              chatgpt_ready: "badge-primary",
+              filling_form: "badge-primary",
+              waiting_link: "badge-warning",
+              success: "badge-success",
+              failed: "badge-danger",
+            };
+            return classes[status] || "badge-primary";
+          };
+
+          onMounted(() => {
+            fetchStatus();
+            fetchVetStats();
+            fetchAccounts();
+            setInterval(fetchStatus, 5000);
+            setInterval(fetchAccounts, 5000);
+          });
+
+          return {
+            systemStatus,
+            stats,
+            vetStats,
+            queueSize,
+            accounts,
+            createCount,
+            createInterval,
+            creating,
+            statusFilter,
+            page,
+            totalPages,
+            fetchAccounts,
+            createAccounts,
+            retryAccount,
+            deleteAccount,
+            stopAll,
+            exportAccounts,
+            getStatusClass,
+            getStatusText,
+          };
+        },
+      }).mount("#app");
+    </script>
+    {% endraw %}
+  </body>
+</html>
