@@ -385,6 +385,102 @@ def get_veteran_stats():
     }), 500
 
 
+@app.route('/api/manual/submit-sheerid', methods=['POST'])
+@require_auth
+def manual_submit_sheerid():
+    """Manual: Submit SheerID Form"""
+    data = request.get_json() or {}
+    url = data.get('url', '').strip()
+    email = data.get('email', '').strip()
+    proxy = data.get('proxy', '').strip() or None
+
+    if not url or not email:
+        return jsonify({'success': False, 'error': 'URL and Email are required'}), 400
+
+    manager = get_account_manager()
+    manager.run_manual_sheerid_task(url, email, proxy=proxy)
+
+    return jsonify({'success': True, 'message': 'SheerID submission task started'})
+
+
+@app.route('/api/manual/verify-token', methods=['POST'])
+@require_auth
+def manual_verify_token():
+    """Manual: Verify Email Token"""
+    data = request.get_json() or {}
+    verify_url = data.get('url', '').strip()
+    proxy = data.get('proxy', '').strip() or None
+
+    if not verify_url:
+        return jsonify({'success': False, 'error': 'URL is required'}), 400
+
+    manager = get_account_manager()
+    manager.run_manual_token_task(verify_url, proxy=proxy)
+
+    return jsonify({'success': True, 'message': 'Token verification task started'})
+
+
+@app.route('/api/manual/generate-sheerid', methods=['POST'])
+@require_auth
+def manual_generate_sheerid():
+    """Manual: Generate SheerID Link from JWT"""
+    data = request.get_json() or {}
+    jwt_token = data.get('jwt', '').strip()
+    proxy = data.get('proxy', '').strip() or None
+
+    if not jwt_token:
+        return jsonify({'success': False, 'error': 'JWT Token is required'}), 400
+
+    manager = get_account_manager()
+    manager.run_manual_generate_sheerid_task(jwt_token, proxy=proxy)
+
+    return jsonify({'success': True, 'message': 'Generation task started'})
+
+
+@app.route('/api/proxies', methods=['GET'])
+@require_auth
+def get_proxies():
+    """Get list of proxies from proxies.txt"""
+    proxies = []
+    proxy_file = os.path.join(os.getcwd(), 'proxies.txt')
+    
+    if os.path.exists(proxy_file):
+        try:
+            with open(proxy_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        proxies.append(line)
+        except Exception as e:
+            logger.error(f"Failed to read proxies.txt: {e}")
+    
+    return jsonify({
+        'success': True, 
+        'proxies': proxies
+    })
+
+
+@app.route('/api/manual/tasks', methods=['GET'])
+@require_auth
+def get_manual_tasks():
+    """Get manual task history"""
+    manager = get_account_manager()
+    return jsonify({
+        'success': True,
+        'tasks': manager.manual_tasks
+    })
+@app.route('/api/manual/generate-status', methods=['GET'])
+@require_auth
+def manual_generate_status():
+    """Manual: Get Generation Status"""
+    manager = get_account_manager()
+    return jsonify({
+        'success': True,
+        'status': getattr(manager, 'manual_gen_status', 'idle'),
+        'result': getattr(manager, 'manual_gen_result', None)
+    })
+
+
 # ==================== 健康检查 ====================
 
 @app.route('/health')

@@ -10,6 +10,7 @@ import threading
 import queue
 import time
 import random
+import asyncio
 from enum import Enum
 from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
@@ -157,8 +158,10 @@ class AccountManager:
         self.veteran_data_manager = veteran_data_manager
 
         # Account storage
-        self.accounts: Dict[str, AccountInfo] = {}
-        self.accounts_lock = threading.Lock()
+        self.accounts: Dict[str, AccountInfo] = {}  # email -> AccountInfo
+        self.manual_tasks: List[Dict] = []          # List of manual task records
+        self.accounts_lock = threading.Lock() # Existing lock for accounts
+        self.lock = threading.Lock() # New general lock as per instruction
 
         # Worker management
         self.workers: Dict[int, Any] = {}
@@ -392,6 +395,139 @@ class AccountManager:
 
         logger.info(f"[Worker {worker_id}] Finished: {email}, Success={success}")
 
+    # ==================== Manual Verification Tasks ====================
+
+    def run_manual_sheerid_task(self, sheerid_url: str, email: str, proxy: Optional[str] = None) -> bool:
+        """Run manual SheerID submission task"""
+        # Record Task
+        task_id = self._add_manual_task("SUBMIT_FORM", f"{email} | {sheerid_url[:20]}...", proxy or "Direct")
+        
+        from browser_worker import BrowserWorker, VerifyTask
+        from veteran_data import VeteranDataManager
+        import asyncio
+
+        def _run_task():
+            logger.info(f"[Manual] Starting SheerID task for {email} (Proxy: {proxy})")
+            
+            # Get Veteran Data
+            vet_manager = VeteranDataManager() # Or reuse self.veteran_data_manager
+            vet_data = vet_manager.get_random_veteran()
+            
+            if not vet_data:
+                logger.error("[Manual] No veteran data available")
+                self._update_manual_task(task_id, "FAILED", "No veteran data")
+                return
+
+            task = VerifyTask(
+                task_id=f"manual-{email.split('@')[0]}",
+                email=email,
+                first_name=vet_data["first_name"],
+                last_name=vet_data["last_name"],
+                branch=vet_data["branch"],
+                birth_date=vet_data["birth_date"],
+                discharge_date=vet_data["discharge_date"]
+            )
+
+            worker = BrowserWorker(
+                headless=self.config.get_headless(),
+                screenshot_dir=self.config.get_debug_screenshot_dir()
+            )
+
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                # Pass proxy to init_browser if supported or manually init
+                # We need to manually set it on the worker or pass to run method if supported
+                # Updating worker init logic dynamically:
+                success = loop.run_until_complete(worker.run_manual_sheerid_form(task, sheerid_url, proxy=proxy))
+                logger.info(f"[Manual] SheerID task finished. Success: {success}")
+                self._update_manual_task(task_id, "SUCCESS" if success else "FAILED", "Form Submitted (Email sent)" if success else "Failed (Check logs)")
+            except Exception as e:
+                logger.error(f"[Manual] Task failed: {e}")
+                self._update_manual_task(task_id, "ERROR", str(e))
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=_run_task, daemon=True)
+        thread.start()
+        return True
+
+    def run_manual_token_task(self, verify_url: str, proxy: Optional[str] = None):
+        """Run manual token verification task"""
+        from browser_worker import BrowserWorker, VerifyTask
+        import asyncio
+        
+        task_id = self._add_manual_task("VERIFY_TOKEN", verify_url[:40] + "...", proxy or "Direct")
+        logger.info(f"[Manual] Starting Token task for {verify_url}")
+
+        def _run_task():
+            logger.info(f"[Manual] Starting Token Verify task for {verify_url} (Proxy: {proxy})")
+
+            task = VerifyTask(
+                task_id=task_id,
+                email="manual-token", 
+                first_name="", last_name="", branch="", birth_date={}, discharge_date={}
+            )
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            worker = BrowserWorker(headless=self.config.get_headless(), screenshot_dir=self.config.get_debug_screenshot_dir())
+            try:
+                # Note: run_email_token_verification was added to BrowserWorker in previous step
+                success = loop.run_until_complete(worker.run_manual_token_verify(task, verify_url, proxy=proxy))
+                logger.info(f"[Manual] Token task finished. Success: {success}")
+                self._update_manual_task(task_id, "SUCCESS" if success else "FAILED", "Verified" if success else "Failed")
+            except Exception as e:
+                logger.error(f"[Manual] Task failed: {e}")
+                self._update_manual_task(task_id, "ERROR", str(e))
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=_run_task, daemon=True)
+        thread.start()
+        return True
+
+    def run_manual_generate_sheerid_task(self, jwt_token: str, proxy: Optional[str] = None) -> bool:
+        """Run manual SheerID generation task"""
+        
+        from browser_worker import BrowserWorker
+        
+        self.manual_gen_status = "running"
+        self.manual_gen_result = None
+        
+        # Record Task
+        task_id = self._add_manual_task("GENERATE_LINK", jwt_token[:20] + "...", proxy or "Direct")
+        
+        logger.info(f"[Manual] Starting SheerID Generation task (Proxy: {proxy})")
+        
+        def _run_task():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            worker = BrowserWorker(headless=self.config.get_headless(), screenshot_dir=self.config.get_debug_screenshot_dir())
+            try:
+                link = loop.run_until_complete(worker.get_sheerid_link_from_jwt(jwt_token, proxy=proxy))
+                if link:
+                    logger.info(f"[Manual] GENERATED LINK: {link}")
+                    self.manual_gen_result = link
+                    self.manual_gen_status = "success"
+                    self._update_manual_task(task_id, "SUCCESS", link)
+                else:
+                    logger.error("[Manual] Failed to generate link")
+                    self.manual_gen_status = "failed"
+                    self.manual_gen_result = "Could not capture link (Check logs/proxy)"
+                    self._update_manual_task(task_id, "FAILED", "Could not capture link")
+            except Exception as e:
+                logger.error(f"[Manual] Gen Task failed: {e}")
+                self.manual_gen_status = "error"
+                self.manual_gen_result = f"Error: {str(e)}"
+                self._update_manual_task(task_id, "ERROR", str(e))
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=_run_task, daemon=True)
+        thread.start()
+        return True
+
     # ==================== Task Queue ====================
 
     def _enqueue_task(self, account: AccountInfo):
@@ -454,6 +590,34 @@ class AccountManager:
                 logger.warning(f"[StopLoss] Consecutive failures {max_failures}, cooldown {cooldown}s")
 
     # ==================== Persistence ====================
+
+    def _add_manual_task(self, task_type: str, input_data: str, proxy: str = "") -> str:
+        """Add a manual task record and return its ID"""
+        task_id = f"task_{int(time.time())}_{random.randint(1000,9999)}"
+        record = {
+            "id": task_id,
+            "type": task_type,
+            "input": input_data,
+            "proxy": proxy,
+            "status": "RUNNING",
+            "result": "",
+            "timestamp": datetime.now().strftime("%H:%M:%S")
+        }
+        with self.lock:
+            self.manual_tasks.insert(0, record)
+            # Keep only last 50
+            if len(self.manual_tasks) > 50:
+                self.manual_tasks.pop()
+        return task_id
+
+    def _update_manual_task(self, task_id: str, status: str, result: str = ""):
+        """Update a manual task record"""
+        with self.lock:
+            for task in self.manual_tasks:
+                if task["id"] == task_id:
+                    task["status"] = status
+                    task["result"] = result
+                    break
 
     def _save_accounts(self, force: bool = False):
         """Save accounts to disk"""

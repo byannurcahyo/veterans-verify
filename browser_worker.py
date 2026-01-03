@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+from camoufox.async_api import AsyncNewBrowser
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,14 +51,14 @@ class VerifyTask:
     password: str = ""
     first_name: str = ""
     last_name: str = ""
-    branch: str = "Army"
-    birth_date: Dict[str, str] = field(default_factory=lambda: {"month": "January", "day": "15", "year": "1985"})
-    discharge_date: Dict[str, str] = field(default_factory=lambda: {"month": "June", "day": "20", "year": "2024"})
+    branch: str = ""
+    birth_date: Dict[str, str] = field(default_factory=dict)
+    discharge_date: Dict[str, str] = field(default_factory=dict)
+    screenshots: list = field(default_factory=list)
     error_message: Optional[str] = None
-    error_type: Optional[str] = None  # Error classification
+    error_type: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.now)
     completed_at: Optional[datetime] = None
-    screenshots: list = field(default_factory=list)  # Screenshot path list
 
 
 class HumanBehavior:
@@ -127,26 +128,113 @@ class BrowserWorker:
         "Marine Corps", "Navy", "Space Force"
     ]
 
-    def __init__(self, headless: bool = True, screenshot_dir: str = None):
+    def __init__(self, headless: bool = True, screenshot_dir: str = ""):
         self.headless = headless
-        self.human = HumanBehavior()
-        self.browser = None
-        self.page = None
         self.screenshot_dir = screenshot_dir
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.playwright = None
+        
+        # from veteran_data import VeteranDataManager  # Delayed import
+        self.human = HumanBehavior()
 
-    async def init_browser(self):
-        """Initialize Camoufox Browser"""
+    # ==================== Manual Verification Helpers ====================
+
+    async def run_manual_token_verify(self, task: VerifyTask, verify_url: str, proxy: Optional[str] = None) -> bool:
+        """Manual Token Verification with Proxy and Verbose Logging"""
         try:
-            from camoufox.async_api import AsyncCamoufox
+            # 1. Init Browser (with proxy if provided)
+            logger.info(f"[Task {task.task_id}] Initializing browser with proxy: {proxy}")
+            if not await self.init_browser(proxy=proxy):
+                logger.error(f"[Task {task.task_id}] Browser Info Failed")
+                return False
 
-            self.browser = await AsyncCamoufox(
-                headless=self.headless,
-                geoip=True,  # Use US IP fingerprint
-                locale="en-US",
-                humanize=True,
-            ).__aenter__()
+            # 2. Open URL
+            logger.info(f"[Task {task.task_id}] Opening verification URL: {verify_url}")
+            await self.page.goto(verify_url, timeout=60000)
+            await asyncio.sleep(2.0)
 
-            self.page = await self.browser.new_page()
+            # 3. Detect Button
+            logger.info(f"[Task {task.task_id}] Looking for 'Verify Email' button...")
+            # Common selectors for ChatGPT/Auth0 verification
+            button_selectors = [
+                'a:has-text("Verify email address")',
+                'button:has-text("Verify email address")', 
+                'a[href*="verify-email"]',
+                '[data-testid="verify-email-button"]',
+                'text=Verify your email' # Fallback text match
+            ]
+            
+            verify_btn = None
+            for selector in button_selectors:
+                try:
+                    verify_btn = await self.page.query_selector(selector)
+                    if verify_btn:
+                        logger.info(f"[Task {task.task_id}] Found button with selector: {selector}")
+                        break
+                except:
+                    continue
+            
+            if verify_btn:
+                # 4. Click Button
+                logger.info(f"[Task {task.task_id}] Clicking 'Verify Email' button...")
+                await verify_btn.click()
+                await asyncio.sleep(5.0) # Wait for result
+                
+                # Check for success
+                content = await self.page.content()
+                if "success" in content.lower() or "verified" in content.lower():
+                     logger.info(f"[Task {task.task_id}] Verification successful (Content match)")
+                     return True
+                else:
+                     logger.warning(f"[Task {task.task_id}] Clicked button but success message not found immediately.")
+                     return True # Assume success if clicked without error? Or take screenshot
+            else:
+                # Maybe it auto-verified?
+                logger.info(f"[Task {task.task_id}] No button found. Checking page content for auto-verification...")
+                content = await self.page.content()
+                if "verified" in content.lower() or "success" in content.lower():
+                     logger.info(f"[Task {task.task_id}] Auto-verification detected.")
+                     return True
+                
+                logger.error(f"[Task {task.task_id}] Failed to find verify button or success message.")
+                await self.take_screenshot(task, "error_token_verify_failed", force=True)
+                return False
+                
+        except Exception as e:
+            logger.error(f"[Task {task.task_id}] Token verify exception: {e}")
+            await self.take_screenshot(task, "error_token_exception", force=True)
+            return False
+        finally:
+            await self.close_browser()
+    async def init_browser(self, proxy: Optional[str] = None):
+        """Initialize browser"""
+        if self.page:
+            return True
+
+        try:
+            from playwright.async_api import async_playwright
+            logger.info("[Browser] Starting Playwright...")
+            self.playwright = await async_playwright().start()
+            
+            # Proxy Config
+            launch_args = {
+                "headless": self.headless,
+                "geoip": True,
+                "locale": "en-US",
+                "humanize": True,
+                "timeout": 60000, # Increased timeout for slow proxies
+            }
+            if proxy:
+                logger.info(f"[Browser] Using Proxy: {proxy}")
+                launch_args["proxy"] = {"server": proxy}
+
+            logger.info("[Browser] Initializing Camoufox...")
+            self.browser = await AsyncNewBrowser(self.playwright, **launch_args)
+
+            self.context = await self.browser.new_context()
+            self.page = await self.context.new_page()
             logger.info("[Browser] Camoufox initialized successfully")
             return True
         except Exception as e:
@@ -156,25 +244,39 @@ class BrowserWorker:
     async def close_browser(self):
         """Close Browser"""
         try:
+            if self.page:
+                await self.page.close()
+            if self.context:
+                await self.context.close()
             if self.browser:
-                await self.browser.__aexit__(None, None, None)
-                self.browser = None
-                self.page = None
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+            
+            self.page = None
+            self.context = None
+            self.browser = None
+            self.playwright = None
         except Exception as e:
             logger.error(f"[Browser] Close failed: {e}")
 
-    async def take_screenshot(self, task: VerifyTask, name: str):
-        """Take Screenshot"""
+    async def take_screenshot(self, task: VerifyTask, name: str, force: bool = False):
+        """Take Screenshot (Optimized: Only on error or forced)"""
         if not self.screenshot_dir:
             return
+
+        # Optimization: Only take screenshot if force=True or task status is FAILED/ERROR
+        if not force and task.status not in [VerifyStatus.FAILED, "ERROR", "FAILED"]:
+            return
+
         try:
             os.makedirs(self.screenshot_dir, exist_ok=True)
             path = os.path.join(self.screenshot_dir, f"{task.task_id}_{name}_{int(time.time())}.png")
-            await self.page.screenshot(path=path)
-            task.screenshots.append(path)
-            logger.debug(f"[Screenshot] Saved: {path}")
+            if self.page:
+                await self.page.screenshot(path=path)
+                logger.debug(f"[Browser] Screenshot saved: {path}")
         except Exception as e:
-            logger.warning(f"[Screenshot] Failed: {e}")
+            logger.error(f"[Browser] Screenshot failed: {e}")
 
     async def human_type(self, selector: str, text: str, clear_first: bool = True):
         """Human-like Typing"""
@@ -343,7 +445,7 @@ class BrowserWorker:
             await self.take_screenshot(task, "01_veterans_claim")
 
             # 2. Click Login Button
-            login_btn = await self.page.query_selector('button:has-text("登录"), button:has-text("Log in"), button:has-text("Sign in")')
+            login_btn = await self.page.query_selector('button:has-text("Log in"), button:has-text("Sign in"), button:has-text("Masuk")')
             if login_btn:
                 await login_btn.click()
                 await asyncio.sleep(self.human.random_delay(3.0, 1.0))
@@ -370,7 +472,7 @@ class BrowserWorker:
                 continue_btn = await self.page.query_selector('button[type="submit"]')
                 if not continue_btn:
                     # Fallback: match Continue text but exclude all social login buttons
-                    continue_btn = await self.page.query_selector('button:has-text("Continue"):not(:has-text("Google")):not(:has-text("Apple")):not(:has-text("Microsoft")):not(:has-text("Phone")):not(:has-text("phone")), button:has-text("继续"):not(:has-text("Google")):not(:has-text("Apple")):not(:has-text("Microsoft")):not(:has-text("Phone"))')
+                    continue_btn = await self.page.query_selector('button:has-text("Continue"):not(:has-text("Google")):not(:has-text("Apple")):not(:has-text("Microsoft")):not(:has-text("Phone")):not(:has-text("phone")), button:has-text("Lanjutkan"):not(:has-text("Google")):not(:has-text("Apple")):not(:has-text("Microsoft")):not(:has-text("Phone"))')
                 if continue_btn:
                     await continue_btn.click()
                     await asyncio.sleep(self.human.random_delay(3.0, 1.0))
@@ -385,7 +487,7 @@ class BrowserWorker:
             is_password_page = False
             password_input = await self.page.query_selector('input[type="password"]')
             
-            if "创建密码" in page_content or "Create password" in page_content or "password" in self.page.url or password_input:
+            if "Buat kata sandi" in page_content or "Create password" in page_content or "password" in self.page.url or password_input:
                 is_password_page = True
                 logger.info(f"[Task {task.task_id}] Password page detected")
                 
@@ -395,7 +497,7 @@ class BrowserWorker:
                      await self.human_type('input[type="password"]', task.password)
                      # ... rest of logic
                      
-                     continue_btn = await self.page.query_selector('button[type="submit"], button:has-text("继续"), button:has-text("Continue")')
+                     continue_btn = await self.page.query_selector('button[type="submit"], button:has-text("Lanjutkan"), button:has-text("Continue")')
                      if continue_btn:
                         await continue_btn.click()
                         await asyncio.sleep(self.human.random_delay(3.0, 1.0))
@@ -504,6 +606,14 @@ class BrowserWorker:
             # Wait for form to load
             await asyncio.sleep(self.human.random_delay(3.0, 1.0))
             await self.take_screenshot(task, "06_sheerid_form")
+
+            # FAST FAIL: Check for "Verification Limit Exceeded"
+            limit_exceeded = await self.page.query_selector('text="Verification Limit Exceeded"')
+            if limit_exceeded:
+                logger.error(f"[Task {task.task_id}] Verification Limit Exceeded detected immediately.")
+                task.error_message = "Verification Limit Exceeded"
+                task.error_type = "LIMIT_EXCEEDED"
+                return False
 
             # Helper for SheerID custom dropdowns
             async def select_sheerid_dropdown(input_id, menu_id, value):
@@ -619,16 +729,6 @@ class BrowserWorker:
             await self.take_screenshot(task, "error_sheerid_form")
             return False
 
-            await self.take_screenshot(task, "07_form_filled")
-            logger.info(f"[Task {task.task_id}] Form filling completed")
-            return True
-
-        except Exception as e:
-            logger.error(f"[Task {task.task_id}] Form filling failed: {e}")
-            task.error_message = str(e)
-            task.error_type = "FORM_FILL_ERROR"
-            await self.take_screenshot(task, "error_form")
-            return False
 
     async def submit_and_wait_link(self, task: VerifyTask, email_manager) -> Tuple[bool, str]:
         """
@@ -657,6 +757,7 @@ class BrowserWorker:
             # Retry loop for status detection (wait for page transition)
             status = "unknown"
             for _ in range(10): # Try for 10-15 seconds
+                await self.take_screenshot(task, f"waiting_status_{_}")
                 page_content = await self.page.content()
                 page_url = self.page.url
                 status = await self.analyze_page_status(page_content, page_url)
@@ -665,9 +766,6 @@ class BrowserWorker:
                     break
                 
                 logger.debug(f"[Task {task.task_id}] Status unknown, URL: {page_url}")
-                # Log snippet of content to see what's there
-                logger.debug(f"Content snippet: {page_content[:300]}...")
-                await self.take_screenshot(task, f"debug_status_unknown_{_}")
                 await asyncio.sleep(1.5)
 
             logger.info(f"[Task {task.task_id}] Page Status: {status}")
@@ -732,15 +830,15 @@ class BrowserWorker:
                 return "success"
 
         # Need Email Link
-        if any(kw in content_lower for kw in ["check your email", "sent you an email", "verify your email", "邮件"]):
+        if any(kw in content_lower for kw in ["check your email", "sent you an email", "verify your email", "periksa email", "verifikasi email"]):
             return "need_email_link"
 
         # Already Verified
-        if any(kw in content_lower for kw in ["already verified", "previously verified", "已验证"]):
+        if any(kw in content_lower for kw in ["already verified", "previously verified", "telah diverifikasi", "sudah diverifikasi"]):
             return "already_verified"
 
         # Invalid Info
-        if any(kw in content_lower for kw in ["unable to verify", "could not verify", "invalid", "无法验证"]):
+        if any(kw in content_lower for kw in ["unable to verify", "could not verify", "invalid", "gagal memverifikasi", "tidak valid"]):
             return "invalid_info"
 
         # Need Login
@@ -941,6 +1039,225 @@ class BrowserWorker:
             await self.take_screenshot(task, "error_unexpected")
             return False
 
+        finally:
+            await self.close_browser()
+
+    async def run_manual_sheerid_form(self, task: VerifyTask, sheerid_url: str, proxy: Optional[str] = None) -> bool:
+        """
+        Manual SheerID Form Fill (For manual trigger)
+        1. Open URL
+        2. Fill Form (using task data)
+        3. Submit
+        4. Wait for 'Check your email' or 'Success'
+        """
+        try:
+            if not await self.init_browser(proxy=proxy):
+                return False
+
+            logger.info(f"[Manual] Opening SheerID URL: {sheerid_url}")
+            await self.page.goto(sheerid_url, timeout=30000)
+            await asyncio.sleep(3) # Wait for load
+
+            # Fill Form (Includes Submit)
+            if not await self.fill_sheerid_form(task):
+                logger.error("[Manual] Failed to fill form")
+                return False
+
+            # Check Status after submission
+            logger.info("[Manual] Form submitted, checking result...")
+            for _ in range(15):
+                await self.take_screenshot(task, f"manual_wait_{_}")
+                content = await self.page.content()
+                status = await self.analyze_page_status(content, self.page.url)
+                
+                logger.debug(f"[Manual] Status check: {status}")
+
+                if status == "need_email_link":
+                    logger.info("[Manual] Success: Verification email sent!")
+                    return True
+                
+                if status == "success":
+                    logger.info("[Manual] Success: Verified instantly!")
+                    return True
+                
+                if status in ["already_verified", "limit_exceeded", "invalid_info"]:
+                    logger.error(f"[Manual] Failed: {status}")
+                    # Return True even if failed logic-wise, effectively "Task Done", 
+                    # but caller might want False. 
+                    # User said "just submission form". If we got a result, we return True (process finished).
+                    # Actually, better to return False so UI shows "Failed".
+                    return False
+                    
+                await asyncio.sleep(1.5)
+            
+            logger.warning("[Manual] Timeout waiting for submission result")
+            return False
+
+        except Exception as e:
+            logger.error(f"[Manual] Exception: {e}")
+            return False
+        finally:
+            await self.close_browser()
+
+    async def run_email_token_verification(self, verification_url: str) -> bool:
+        """
+        Manual Email Token Verification
+        1. Open Link
+        2. Wait for confirmation
+        """
+        task = VerifyTask(task_id=f"manual-link-{int(time.time())}")
+        try:
+            if not await self.init_browser():
+                return False
+
+            logger.info(f"[ManualLink] Opening: {verification_url}")
+            await self.page.goto(verification_url)
+            
+            # Wait for processing
+            for _ in range(15):
+                await asyncio.sleep(2.0)
+                await self.take_screenshot(task, f"link_process_{_}")
+                
+                content = await self.page.content()
+                status = await self.analyze_page_status(content, self.page.url)
+                
+                if status == "success":
+                    logger.info("[ManualLink] Verification Success!")
+                    return True
+                
+                if status in ["already_verified", "limit_exceeded", "invalid_info"]:
+                    logger.error(f"[ManualLink] Failed: {status}")
+                    return False
+            
+            return False
+        except Exception as e:
+             logger.error(f"[ManualLink] Exception: {e}")
+             return False
+        finally:
+            await self.close_browser()
+
+
+
+    async def get_sheerid_link_from_jwt(self, jwt_token: str, proxy: Optional[str] = None) -> Optional[str]:
+        """
+        Get SheerID Link using JWT
+        1. Set session cookie
+        2. Go to veterans-claim
+        3. Click Verify
+        4. Capture SheerID URL
+        """
+        task = VerifyTask(task_id=f"jwt-gen-{int(time.time())}")
+        try:
+            if not await self.init_browser(proxy=proxy):
+                return None
+            
+            # Go to domain first to set context
+            logger.info("[JWT] Navigating to domain root...")
+            await self.page.goto("https://chatgpt.com")
+            
+            # --- Cookie Consent Handling (Before Auth) ---
+            try:
+                logger.info("[JWT] Checking for cookie consent banners (waiting 5s)...")
+                
+                # Wait for banner to possibly appear
+                await asyncio.sleep(5.0) 
+                
+                cookie_selectors = [
+                    'button:has-text("Accept all")',
+                    'button:has-text("Accept")', 
+                    'button:has-text("Allow")', 
+                    'button:has-text("I agree")',
+                    'button:has-text("OK")',
+                    '[id*="cookie"] button',
+                    '[class*="cookie"] button',
+                    '#onetrust-accept-btn-handler'
+                ]
+                
+                for selector in cookie_selectors:
+                    try:
+                        consent_btn = await self.page.query_selector(selector)
+                        if consent_btn and await consent_btn.is_visible():
+                            text = await consent_btn.inner_text()
+                            logger.info(f"[JWT] Found cookie button: '{text}' ({selector}). Clicking...")
+                            await consent_btn.click()
+                            await asyncio.sleep(1.0) # Wait for animation
+                            break # Clicked one, usually enough
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"[JWT] Cookie handling error: {e}")
+            # -------------------------------
+
+            await asyncio.sleep(1.0)
+
+            logger.info("[JWT] Setting auth cookie...")
+            await self.page.context.add_cookies([{
+                "name": "__Secure-next-auth.session-token",
+                "value": jwt_token,
+                "domain": ".chatgpt.com",
+                "path": "/",
+                "secure": True,
+                "sameSite": "Lax"
+            }])
+            
+            # Navigate to target
+            logger.info("[JWT] Navigating to veterans-claim...")
+
+            await self.page.goto(self.VETERANS_CLAIM_URL)
+            await asyncio.sleep(self.human.random_delay(4.0, 2.0))
+            
+            # Debug: Check where we are
+            current_url = self.page.url
+            page_title = await self.page.title()
+            logger.info(f"[JWT] Page loaded. URL: {current_url}, Title: {page_title}")
+
+            # Click Verify Button
+            verify_selectors = [
+                 'button:has-text("Verify eligibility")',
+                 'button:has-text("Verify your eligibility")',
+                 'button:has-text("Verify")',
+                 '[data-testid*="verify"]'
+            ]
+            
+            verify_btn = None
+            for selector in verify_selectors:
+                if await self.page.query_selector(selector):
+                    verify_btn = await self.page.query_selector(selector)
+                    break
+            
+            if verify_btn:
+                logger.info("[JWT] Found verify button, clicking...")
+                
+                # Listen for new page or request
+                async with self.page.expect_navigation(url=lambda u: "sheerid.com" in u, timeout=15000) as response_info:
+                    await verify_btn.click()
+                
+                # Wait a bit for redirect to settle
+                await asyncio.sleep(2.0)
+                
+                current_url = self.page.url
+                if "sheerid.com" in current_url:
+                    logger.info(f"[JWT] Captured SheerID URL: {current_url}")
+                    return current_url
+                else:
+                    logger.warning(f"[JWT] Redirected to {current_url}, expected SheerID")
+                    # Fallback: check if we are on SheerID now (maybe navigation happened fast)
+                    if "sheerid" in current_url:
+                         return current_url
+            else:
+                logger.error("[JWT] Verify button not found. Session might be invalid.")
+                
+                # Check if we are on login page
+                content = await self.page.content()
+                if "Log in" in content or "Sign up" in content:
+                    logger.error("[JWT] Detected Login page - Authentication Failed")
+                    return "ERROR: Auth Failed. Invalid Session Cookie."
+
+            return None
+
+        except Exception as e:
+            logger.error(f"[JWT] Exception: {e}")
+            return None
         finally:
             await self.close_browser()
 
