@@ -199,11 +199,13 @@ class BrowserWorker:
                      return True
                 
                 logger.error(f"[Task {task.task_id}] Failed to find verify button or success message.")
-                await self.take_screenshot(task, "error_token_verify_failed", force=True)
-                return False
+            task.error_message = "Failed to find verify button or success message"
+            await self.take_screenshot(task, "error_token_verify_failed", force=True)
+            return False
                 
         except Exception as e:
             logger.error(f"[Task {task.task_id}] Token verify exception: {e}")
+            task.error_message = f"Token verify exception: {str(e)}"
             await self.take_screenshot(task, "error_token_exception", force=True)
             return False
         finally:

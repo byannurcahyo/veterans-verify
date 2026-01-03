@@ -441,7 +441,7 @@ class AccountManager:
                 # Updating worker init logic dynamically:
                 success = loop.run_until_complete(worker.run_manual_sheerid_form(task, sheerid_url, proxy=proxy))
                 logger.info(f"[Manual] SheerID task finished. Success: {success}")
-                self._update_manual_task(task_id, "SUCCESS" if success else "FAILED", "Form Submitted (Email sent)" if success else "Failed (Check logs)")
+                self._update_manual_task(task_id, "SUCCESS" if success else "FAILED", "Form Submitted (Email sent)" if success else f"Failed: {task.error_message or 'Check logs'}")
             except Exception as e:
                 logger.error(f"[Manual] Task failed: {e}")
                 self._update_manual_task(task_id, "ERROR", str(e))
@@ -476,7 +476,7 @@ class AccountManager:
                 # Note: run_email_token_verification was added to BrowserWorker in previous step
                 success = loop.run_until_complete(worker.run_manual_token_verify(task, verify_url, proxy=proxy))
                 logger.info(f"[Manual] Token task finished. Success: {success}")
-                self._update_manual_task(task_id, "SUCCESS" if success else "FAILED", "Verified" if success else "Failed")
+                self._update_manual_task(task_id, "SUCCESS" if success else "FAILED", "Verified" if success else f"Failed: {task.error_message or 'Check logs'}")
             except Exception as e:
                 logger.error(f"[Manual] Task failed: {e}")
                 self._update_manual_task(task_id, "ERROR", str(e))
@@ -506,16 +506,17 @@ class AccountManager:
             worker = BrowserWorker(headless=self.config.get_headless(), screenshot_dir=self.config.get_debug_screenshot_dir())
             try:
                 link = loop.run_until_complete(worker.get_sheerid_link_from_jwt(jwt_token, proxy=proxy))
-                if link:
+                if link and not link.startswith("ERROR"):
                     logger.info(f"[Manual] GENERATED LINK: {link}")
                     self.manual_gen_result = link
                     self.manual_gen_status = "success"
                     self._update_manual_task(task_id, "SUCCESS", link)
                 else:
-                    logger.error("[Manual] Failed to generate link")
+                    error_msg = link if link else "Could not capture link"
+                    logger.error(f"[Manual] Failed to generate link: {error_msg}")
                     self.manual_gen_status = "failed"
-                    self.manual_gen_result = "Could not capture link (Check logs/proxy)"
-                    self._update_manual_task(task_id, "FAILED", "Could not capture link")
+                    self.manual_gen_result = error_msg
+                    self._update_manual_task(task_id, "FAILED", error_msg)
             except Exception as e:
                 logger.error(f"[Manual] Gen Task failed: {e}")
                 self.manual_gen_status = "error"

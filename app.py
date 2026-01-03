@@ -29,6 +29,7 @@ log.setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # Flask 应用
+# Flask 应用
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
